@@ -3,7 +3,19 @@ const fs = require('node:fs');
 const Database = require('better-sqlite3');
 
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, '..', 'data', 'receptionist.db');
+const SCHEMA_PATH = path.join(__dirname, '..', 'src', 'db', 'schema.sql');
 const DRY_RUN = process.argv.includes('--dry-run');
+
+function ensureSchema(db) {
+  const hasCustomersTable = db
+    .prepare("select 1 from sqlite_master where type = 'table' and name = 'customers' limit 1")
+    .get();
+
+  if (hasCustomersTable) return;
+
+  const schemaSql = fs.readFileSync(SCHEMA_PATH, 'utf8');
+  db.exec(schemaSql);
+}
 
 function normalizePhone(rawPhone) {
   const trimmed = String(rawPhone || '').trim();
@@ -28,6 +40,7 @@ function run() {
   fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
   const db = new Database(DB_PATH);
   db.pragma('foreign_keys = ON');
+  ensureSchema(db);
 
   const customers = db
     .prepare('select id, phone, created_at from customers order by created_at asc, id asc')
