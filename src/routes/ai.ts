@@ -8,6 +8,7 @@ import { getAllActiveRules } from '../repositories/businessRules';
 import { createCallbackTask } from '../repositories/callbackTasks';
 import { attachTranscript, startCall, updateCall } from '../repositories/calls';
 import { createCustomer, findCustomerByPhone } from '../repositories/customers';
+import { getOperationsDashboardSnapshot } from '../repositories/dashboard';
 import { createVehicle, listVehiclesByCustomer } from '../repositories/vehicles';
 import { evaluateAutoBookPolicy } from '../services/bookingPolicy';
 
@@ -23,6 +24,15 @@ aiRouter.get('/policy', (_req, res) => {
     policy[rule.ruleKey] = { ruleType: rule.ruleType, ...rule.ruleValue };
   }
   res.json(policy);
+});
+
+aiRouter.get('/dashboard', (req, res) => {
+  const limitRaw = String(req.query.limit ?? '20');
+  const parsed = Number(limitRaw);
+  const limit = Number.isFinite(parsed) ? parsed : 20;
+  const rangeRaw = String(req.query.range ?? '24h');
+  const rangeKey = rangeRaw === '7d' ? '7d' : '24h';
+  res.json(getOperationsDashboardSnapshot({ limit, rangeKey }));
 });
 
 aiRouter.get('/customers/lookup', (req, res) => {

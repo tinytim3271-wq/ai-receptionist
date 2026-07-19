@@ -44,6 +44,9 @@ npm run dev
 
 Open http://localhost:3000 — enter a caller phone number and start a simulated call.
 
+The same page now includes an Operations Dashboard tab. Paste `AI_API_BEARER_TOKEN` there to load live metrics and recent records (calls, callback queue, and telephony webhook events).
+Use the dashboard controls to switch between `24h` and `7d` ranges and optionally enable auto-refresh (`15s` or `30s`).
+
 The database is a single file at `data/receptionist.db` (created automatically). Every call, customer, vehicle, appointment, callback task, AI action, and guardrail event is stored there.
 
 Request logging is emitted as structured JSON lines and includes `requestId`, status code, route, and latency. The response also includes `x-request-id` for correlation.
@@ -70,6 +73,10 @@ The migration is transactional and reassigns dependent records before merging du
 ## API
 
 The management API from the original design is available at `/api/ai/*` (policy, customer lookup/create, vehicles, calls, transcripts, appointment requests, availability, appointments, callback tasks, interaction logs).
+
+Operations dashboard data endpoint:
+- `GET /api/ai/dashboard?limit=20&range=24h`
+- Range options: `24h` (default) or `7d`
 
 All `/api/ai/*` endpoints now require an Authorization header:
 
