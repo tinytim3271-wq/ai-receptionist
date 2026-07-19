@@ -81,7 +81,12 @@ jobs:
 
       - name: Print server logs on failure
         if: failure()
-        run: cat /tmp/ai-receptionist.log
+        run: |
+          if [ -f /tmp/ai-receptionist.log ]; then
+            cat /tmp/ai-receptionist.log
+          else
+            echo "No server log file found."
+          fi
 
       - name: Stop server
         if: always()
