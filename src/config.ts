@@ -15,6 +15,16 @@ function requiredSecret(name: string): string {
   if (insecureDefaults.has(value.trim().toLowerCase())) {
     throw new Error(`Environment variable ${name} must be changed from the default placeholder value.`);
   }
+
+  const looksWeak = value.length < 32;
+  const isProduction = (process.env.NODE_ENV ?? 'development') === 'production';
+  if (isProduction && looksWeak) {
+    throw new Error(`Environment variable ${name} must be at least 32 characters in production.`);
+  }
+  if (!isProduction && looksWeak) {
+    console.warn(`WARNING: ${name} is shorter than 32 characters. Use a stronger token before production.`);
+  }
+
   return value;
 }
 
@@ -23,6 +33,10 @@ export const config = {
   dbPath: path.join(__dirname, '..', 'data', 'receptionist.db'),
   openaiApiKey: process.env.OPENAI_API_KEY ?? '',
   apiBearerToken: requiredSecret('AI_API_BEARER_TOKEN'),
+  telephonyTwilioAuthToken: process.env.TELEPHONY_TWILIO_AUTH_TOKEN ?? '',
+  telephonyWebhookBaseUrl: process.env.TELEPHONY_WEBHOOK_BASE_URL ?? '',
+  telephonyRequireSignature: (process.env.TELEPHONY_REQUIRE_SIGNATURE ?? 'true').toLowerCase() !== 'false',
+  telephonyAiTimeoutMs: Number(process.env.TELEPHONY_AI_TIMEOUT_MS ?? 12000),
   openaiModel: process.env.OPENAI_MODEL ?? 'gpt-4o-mini',
   shopName: required('SHOP_NAME', 'Reliable Shop Systems'),
   shopAddress: required('SHOP_ADDRESS', '123 Main St'),

@@ -33,6 +33,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Validate phone normalization migration (dry-run)
+        run: npm run migrate:normalize-phones:dry
+
       - name: Build
         run: npm run build
 
@@ -40,6 +43,7 @@ jobs:
         env:
           AI_API_BEARER_TOKEN: ${{ secrets.AI_API_BEARER_TOKEN }}
           OPENAI_API_KEY: test-not-required-for-this-suite
+          TELEPHONY_TWILIO_AUTH_TOKEN: ci-telephony-test-token
         run: |
           node dist/server.js > /tmp/ai-receptionist.log 2>&1 &
           echo $! > /tmp/ai-receptionist.pid
@@ -70,9 +74,19 @@ jobs:
           AI_API_BEARER_TOKEN: ${{ secrets.AI_API_BEARER_TOKEN }}
         run: npm run test:integration
 
+      - name: Run telephony webhook test
+        env:
+          TELEPHONY_TWILIO_AUTH_TOKEN: ci-telephony-test-token
+        run: npm run test:telephony
+
       - name: Print server logs on failure
         if: failure()
-        run: cat /tmp/ai-receptionist.log
+        run: |
+          if [ -f /tmp/ai-receptionist.log ]; then
+            cat /tmp/ai-receptionist.log
+          else
+            echo "No server log file found."
+          fi
 
       - name: Stop server
         if: always()

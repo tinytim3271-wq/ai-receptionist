@@ -177,6 +177,20 @@ create table if not exists ai_guardrail_events (
 create index if not exists idx_ai_guardrail_events_call_id on ai_guardrail_events(call_id);
 create index if not exists idx_ai_guardrail_events_severity on ai_guardrail_events(severity);
 
+create table if not exists telephony_webhook_events (
+  id text primary key,
+  provider text not null,
+  event_key text not null,
+  call_id text references calls(id) on delete set null,
+  response_code integer not null,
+  response_body text,
+  created_at text not null,
+  unique(provider, event_key)
+);
+
+create index if not exists idx_telephony_webhook_events_provider on telephony_webhook_events(provider);
+create index if not exists idx_telephony_webhook_events_call_id on telephony_webhook_events(call_id);
+
 create table if not exists business_rules (
   id text primary key,
   rule_type text not null,

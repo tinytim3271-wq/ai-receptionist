@@ -3,6 +3,7 @@ import path from 'node:path';
 import { config } from './config';
 import './db';
 import { seedBusinessRules } from './db/seed';
+import { requestLogging } from './middleware/requestLogging';
 import { aiRouter } from './routes/ai';
 import { chatRouter } from './routes/chat';
 import { telephonyRouter } from './routes/telephony';
@@ -11,6 +12,7 @@ seedBusinessRules();
 
 const app = express();
 app.use(express.json());
+app.use(requestLogging);
 
 app.use('/api/ai', aiRouter);
 app.use('/api/chat', chatRouter);

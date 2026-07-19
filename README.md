@@ -21,7 +21,20 @@ copy .env.example .env
 
 Edit `.env` and set `OPENAI_API_KEY` and `AI_API_BEARER_TOKEN`. Adjust shop name, address, and policies there too.
 
-Security note: `AI_API_BEARER_TOKEN` is required and must not be a placeholder value (for example, `change-me`). Use a long random token.
+Generate a strong API token (recommended):
+
+```bash
+npm run token:generate
+```
+
+Security note: `AI_API_BEARER_TOKEN` is required and must not be a placeholder value (for example, `change-me`).
+Production note: when `NODE_ENV=production`, token length must be at least 32 characters.
+
+Telephony security notes:
+- Set `TELEPHONY_TWILIO_AUTH_TOKEN` to your provider webhook signing token.
+- Keep `TELEPHONY_REQUIRE_SIGNATURE=true` in production.
+- If behind reverse proxies or tunnels, set `TELEPHONY_WEBHOOK_BASE_URL` so signature validation uses the exact public URL.
+- AI turn timeout is controlled by `TELEPHONY_AI_TIMEOUT_MS` (default: 12000).
 
 ## Run
 
@@ -32,6 +45,19 @@ npm run dev
 Open http://localhost:3000 — enter a caller phone number and start a simulated call.
 
 The database is a single file at `data/receptionist.db` (created automatically). Every call, customer, vehicle, appointment, callback task, AI action, and guardrail event is stored there.
+
+Request logging is emitted as structured JSON lines and includes `requestId`, status code, route, and latency. The response also includes `x-request-id` for correlation.
+
+Customer identity uses canonical phone normalization (for example, `555-123-4567`, `(555) 123-4567`, and `+1 5551234567` resolve to the same customer).
+
+To normalize legacy records already in the database:
+
+```bash
+npm run migrate:normalize-phones:dry
+npm run migrate:normalize-phones
+```
+
+The migration is transactional and reassigns dependent records before merging duplicate customers that normalize to the same phone.
 
 ## What it does
 
@@ -92,12 +118,42 @@ npm run test:integration
 
 This verifies key endpoint contracts (status codes and response shape) across policy, lookup, customer, vehicle, availability, and appointment flows.
 
+### Telephony webhook test
+
+With the server running, execute:
+
+```powershell
+Set-Location "programs/ai-receptionist"
+$env:TELEPHONY_TWILIO_AUTH_TOKEN = "telephony-test-token"
+npm run test:telephony
+```
+
+This verifies:
+- Signature enforcement (invalid signature rejected)
+- Inbound start/turn/end lifecycle routes
+- Idempotent handling of duplicate turn events
+
 ### CI gate
 
-A GitHub Actions workflow runs build + smoke + integration tests on push and pull requests affecting this project.
+A GitHub Actions workflow runs migration dry-run + build + smoke + integration + telephony webhook tests on push and pull requests affecting this project.
 
 Required repository secret:
 - `AI_API_BEARER_TOKEN`
+
+### Production secret rotation
+
+Generate and rotate the API bearer token GitHub secret:
+
+```powershell
+Set-Location "programs/ai-receptionist"
+./scripts/rotate-api-token-secret.ps1 -Owner "YOUR_GITHUB_OWNER" -Repo "YOUR_REPO_NAME"
+```
+
+Important: after rotating the GitHub secret, update the runtime/deployment environment token to the same new value before the next deploy.
+
+### Operations query pack
+
+Use the query runbook in [docs/operations-sql.md](docs/operations-sql.md) for auth denial trends, blocked auto-book trends, escalation/callback volume, telephony replay visibility, and call outcome snapshots.
 
 ### Branch protection (require CI before merge)
 
@@ -127,4 +183,11 @@ This enforces:
 
 ## Adding a real phone number later
 
-See `src/routes/telephony.ts`. Point a telephony provider's inbound-call webhook (Twilio, Telnyx, or a SIP trunk) at this server and feed transcribed speech into the same engine the chat UI uses. The core logic does not change.
+See `src/routes/telephony.ts`.
+
+Twilio-style endpoints:
+- `POST /api/telephony/twilio/voice/start`
+- `POST /api/telephony/twilio/voice/turn`
+- `POST /api/telephony/twilio/voice/end`
+
+These handlers provide signature verification, replay/idempotency protection, call lifecycle persistence, AI timeout fallback, and callback-task escalation.

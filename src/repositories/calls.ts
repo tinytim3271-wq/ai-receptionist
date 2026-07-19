@@ -57,6 +57,11 @@ export function getCallById(id: string): CallRecord | undefined {
   return row ? toCall(row) : undefined;
 }
 
+export function getCallByExternalCallId(externalCallId: string): CallRecord | undefined {
+  const row = db.prepare<[string], CallRow>('select * from calls where external_call_id = ?').get(externalCallId);
+  return row ? toCall(row) : undefined;
+}
+
 export interface StartCallInput {
   externalCallId?: string;
   phoneNumber: string;
