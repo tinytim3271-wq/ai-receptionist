@@ -10,29 +10,123 @@
   <div class="container">
     <header>
       <h1>Reliable Shop Systems</h1>
-      <p class="subtitle">AI Receptionist — local call simulator</p>
+      <p class="subtitle">AI Receptionist — simulator + operations dashboard</p>
     </header>
 
-    <section id="start-panel" class="panel">
-      <label for="phone-input">Caller phone number</label>
-      <div class="row">
-        <input id="phone-input" type="tel" placeholder="555-123-4567" value="555-123-4567">
-        <button id="start-btn">Start Call</button>
-      </div>
-      <p class="hint">This simulates an inbound phone call. A real phone line can be plugged in later.</p>
+    <nav class="tabs" aria-label="Views">
+      <button id="tab-simulator" class="tab-btn active" type="button">Call Simulator</button>
+      <button id="tab-dashboard" class="tab-btn" type="button">Operations Dashboard</button>
+    </nav>
+
+    <section id="simulator-view" class="view active">
+      <section id="start-panel" class="panel">
+        <label for="phone-input">Caller phone number</label>
+        <div class="row">
+          <input id="phone-input" type="tel" placeholder="555-123-4567" value="555-123-4567">
+          <button id="start-btn">Start Call</button>
+        </div>
+        <p class="hint">This simulates an inbound phone call. A real phone line can be plugged in later.</p>
+      </section>
+
+      <section id="call-panel" class="panel hidden">
+        <div class="call-header">
+          <span id="call-status" class="badge">On call</span>
+          <button id="end-btn" class="secondary">End Call</button>
+        </div>
+        <div id="messages" class="messages"></div>
+        <div id="events" class="events"></div>
+        <div class="row">
+          <input id="message-input" type="text" placeholder="Speak as the caller..." autocomplete="off">
+          <button id="send-btn">Send</button>
+        </div>
+      </section>
     </section>
 
-    <section id="call-panel" class="panel hidden">
-      <div class="call-header">
-        <span id="call-status" class="badge">On call</span>
-        <button id="end-btn" class="secondary">End Call</button>
-      </div>
-      <div id="messages" class="messages"></div>
-      <div id="events" class="events"></div>
-      <div class="row">
-        <input id="message-input" type="text" placeholder="Speak as the caller..." autocomplete="off">
-        <button id="send-btn">Send</button>
-      </div>
+    <section id="dashboard-view" class="view">
+      <section class="panel dashboard-auth">
+        <label for="dashboard-token">API bearer token</label>
+        <div class="row">
+          <input id="dashboard-token" type="password" placeholder="Paste AI_API_BEARER_TOKEN">
+          <button id="save-token-btn" class="secondary">Save</button>
+          <button id="refresh-dashboard-btn">Refresh</button>
+        </div>
+        <div class="row dashboard-controls-row">
+          <label for="dashboard-range">Range</label>
+          <select id="dashboard-range">
+            <option value="24h" selected>Last 24 hours</option>
+            <option value="7d">Last 7 days</option>
+          </select>
+          <label for="dashboard-refresh-interval">Auto-refresh</label>
+          <select id="dashboard-refresh-interval">
+            <option value="off" selected>Off</option>
+            <option value="15">15s</option>
+            <option value="30">30s</option>
+          </select>
+          <span id="auto-refresh-indicator" class="pill">Idle</span>
+        </div>
+        <p id="dashboard-status" class="hint">Enter a valid token to load operational metrics.</p>
+      </section>
+
+      <section class="stats-grid" id="dashboard-stats"></section>
+
+      <section class="panel">
+        <h2 id="trend-title">Guardrail Trend (24h)</h2>
+        <div id="trend-rows" class="trend-rows"></div>
+      </section>
+
+      <section class="panel">
+        <h2>Recent Calls</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Started</th>
+                <th>Phone</th>
+                <th>Channel</th>
+                <th>Disposition</th>
+                <th>Priority</th>
+              </tr>
+            </thead>
+            <tbody id="recent-calls-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Open Callback Queue</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Priority</th>
+                <th>Queue</th>
+                <th>Status</th>
+                <th>Reason</th>
+                <th>Created</th>
+              </tr>
+            </thead>
+            <tbody id="callback-queue-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Telephony Replay Visibility</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Created</th>
+                <th>Provider</th>
+                <th>Event Key</th>
+                <th>Call</th>
+                <th>Code</th>
+              </tr>
+            </thead>
+            <tbody id="telephony-events-body"></tbody>
+          </table>
+        </div>
+      </section>
     </section>
   </div>
   <script src="app.js"></script>
