@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reliable Shop Systems — AI Receptionist</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Reliable Shop Systems</h1>
+      <p class="subtitle">AI Receptionist — local call simulator</p>
+    </header>
+
+    <section id="start-panel" class="panel">
+      <label for="phone-input">Caller phone number</label>
+      <div class="row">
+        <input id="phone-input" type="tel" placeholder="555-123-4567" value="555-123-4567">
+        <button id="start-btn">Start Call</button>
+      </div>
+      <p class="hint">This simulates an inbound phone call. A real phone line can be plugged in later.</p>
+    </section>
+
+    <section id="call-panel" class="panel hidden">
+      <div class="call-header">
+        <span id="call-status" class="badge">On call</span>
+        <button id="end-btn" class="secondary">End Call</button>
+      </div>
+      <div id="messages" class="messages"></div>
+      <div id="events" class="events"></div>
+      <div class="row">
+        <input id="message-input" type="text" placeholder="Speak as the caller..." autocomplete="off">
+        <button id="send-btn">Send</button>
+      </div>
+    </section>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>

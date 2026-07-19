@@ -1,0 +1,81 @@
+name: ai-receptionist-ci
+
+on:
+  push:
+    paths:
+      - "**"
+  pull_request:
+    paths:
+      - "**"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Verify required secret
+        run: |
+          if [ -z "${{ secrets.AI_API_BEARER_TOKEN }}" ]; then
+            echo "Missing required secret: AI_API_BEARER_TOKEN"
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Start server
+        env:
+          AI_API_BEARER_TOKEN: ${{ secrets.AI_API_BEARER_TOKEN }}
+          OPENAI_API_KEY: test-not-required-for-this-suite
+        run: |
+          node dist/server.js > /tmp/ai-receptionist.log 2>&1 &
+          echo $! > /tmp/ai-receptionist.pid
+
+      - name: Wait for server readiness
+        env:
+          AI_API_BEARER_TOKEN: ${{ secrets.AI_API_BEARER_TOKEN }}
+        run: |
+          for i in {1..30}; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer ${AI_API_BEARER_TOKEN}" http://127.0.0.1:3000/api/ai/policy || true)
+            if [ "$STATUS" = "200" ]; then
+              echo "Server is ready"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Server failed readiness check"
+          cat /tmp/ai-receptionist.log
+          exit 1
+
+      - name: Run auth smoke test
+        env:
+          AI_API_BEARER_TOKEN: ${{ secrets.AI_API_BEARER_TOKEN }}
+        run: npm run test:auth-smoke
+
+      - name: Run integration test
+        env:
+          AI_API_BEARER_TOKEN: ${{ secrets.AI_API_BEARER_TOKEN }}
+        run: npm run test:integration
+
+      - name: Print server logs on failure
+        if: failure()
+        run: cat /tmp/ai-receptionist.log
+
+      - name: Stop server
+        if: always()
+        run: |
+          if [ -f /tmp/ai-receptionist.pid ]; then
+            kill $(cat /tmp/ai-receptionist.pid) || true
+          fi

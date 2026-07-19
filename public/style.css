@@ -1,0 +1,110 @@
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  background: #10151c;
+  color: #e6e9ee;
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  padding: 2rem 1rem;
+}
+
+.container { width: 100%; max-width: 640px; }
+
+header { text-align: center; margin-bottom: 1.5rem; }
+header h1 { font-size: 1.6rem; color: #4fa3ff; }
+.subtitle { color: #8b95a3; font-size: 0.9rem; margin-top: 0.25rem; }
+
+.panel {
+  background: #1a212b;
+  border: 1px solid #2a3441;
+  border-radius: 12px;
+  padding: 1.25rem;
+}
+
+.hidden { display: none; }
+
+label { display: block; font-size: 0.85rem; color: #8b95a3; margin-bottom: 0.5rem; }
+
+.row { display: flex; gap: 0.5rem; }
+
+input {
+  flex: 1;
+  padding: 0.65rem 0.85rem;
+  border-radius: 8px;
+  border: 1px solid #2a3441;
+  background: #10151c;
+  color: #e6e9ee;
+  font-size: 1rem;
+}
+input:focus { outline: 2px solid #4fa3ff44; border-color: #4fa3ff; }
+
+button {
+  padding: 0.65rem 1.2rem;
+  border-radius: 8px;
+  border: none;
+  background: #4fa3ff;
+  color: #0b1017;
+  font-weight: 600;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+button:hover { background: #6cb4ff; }
+button:disabled { opacity: 0.5; cursor: wait; }
+button.secondary { background: #2a3441; color: #e6e9ee; }
+button.secondary:hover { background: #38455a; }
+
+.hint { font-size: 0.78rem; color: #6b7686; margin-top: 0.75rem; }
+
+.call-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.badge {
+  background: #16351f;
+  color: #5fd882;
+  font-size: 0.8rem;
+  padding: 0.25rem 0.7rem;
+  border-radius: 999px;
+}
+
+.messages {
+  height: 340px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.5rem 0.25rem;
+  margin-bottom: 0.5rem;
+}
+
+.msg {
+  max-width: 85%;
+  padding: 0.6rem 0.9rem;
+  border-radius: 12px;
+  font-size: 0.95rem;
+  line-height: 1.4;
+  white-space: pre-wrap;
+}
+
+.msg.caller { align-self: flex-end; background: #2b4a71; }
+.msg.ai { align-self: flex-start; background: #232c38; }
+.msg.error { align-self: center; background: #4a2323; color: #ff9d9d; font-size: 0.85rem; }
+
+.events { display: flex; flex-direction: column; gap: 0.3rem; margin-bottom: 0.6rem; }
+
+.event {
+  font-size: 0.8rem;
+  padding: 0.35rem 0.7rem;
+  border-radius: 6px;
+  background: #1f2a1f;
+  color: #9ad89a;
+  border-left: 3px solid #5fd882;
+}
+
+.event.escalation,
+.event.guardrail_blocked { background: #332119; color: #ffb27d; border-left-color: #ff8c42; }
