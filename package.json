@@ -9,6 +9,10 @@
     "dev": "tsx watch src/server.ts",
     "build": "tsc -p tsconfig.json && node -e \"require('fs').copyFileSync('src/db/schema.sql','dist/db/schema.sql')\"",
     "start": "node dist/server.js",
+    "token:generate": "node scripts/generate-api-token.js",
+    "test:telephony": "node scripts/telephony-webhook-test.js",
+    "migrate:normalize-phones:dry": "node scripts/migrate-normalize-phones.js --dry-run",
+    "migrate:normalize-phones": "node scripts/migrate-normalize-phones.js",
     "test:auth-smoke": "node scripts/api-auth-smoke-test.js",
     "test:integration": "node scripts/api-integration-test.js"
   },

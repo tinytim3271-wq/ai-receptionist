@@ -120,6 +120,7 @@ aiRouter.post('/appointments', (req, res) => {
 
   const policy = evaluateAutoBookPolicy(String(serviceType));
   if (!policy.allowed) {
+    const requestId = typeof res.locals.requestId === 'string' ? res.locals.requestId : undefined;
     try {
       logGuardrailEvent({
         eventType: 'blocked_autobook_rest',
@@ -129,6 +130,7 @@ aiRouter.post('/appointments', (req, res) => {
           serviceType: String(serviceType),
           endpoint: '/api/ai/appointments',
           callId: req.body?.callId ? String(req.body.callId) : undefined,
+          requestId,
         },
         actionTaken: 'Rejected appointment creation request with 403',
       });

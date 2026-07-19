@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { db } from '../db';
 import type { Customer } from '../types';
+import { normalizePhone } from '../utils/phone';
 
 interface CustomerRow {
   id: string;
@@ -27,7 +28,15 @@ function toCustomer(row: CustomerRow): Customer {
 }
 
 export function findCustomerByPhone(phone: string): Customer | undefined {
-  const row = db.prepare<[string], CustomerRow>('select * from customers where phone = ?').get(phone);
+  const normalized = normalizePhone(phone);
+  const normalizedRow = db.prepare<[string], CustomerRow>('select * from customers where phone = ?').get(normalized);
+  if (normalizedRow) {
+    return toCustomer(normalizedRow);
+  }
+
+  // Legacy fallback for records created before canonical normalization was introduced.
+  const legacyRow = normalized === phone ? undefined : db.prepare<[string], CustomerRow>('select * from customers where phone = ?').get(phone);
+  const row = legacyRow;
   return row ? toCustomer(row) : undefined;
 }
 
@@ -38,6 +47,12 @@ export function getCustomerById(id: string): Customer | undefined {
 
 export function createCustomer(input: Pick<Customer, 'firstName' | 'lastName' | 'phone' | 'email' | 'marketingOptIn'>): Customer {
   const now = new Date().toISOString();
+  const normalizedPhone = normalizePhone(input.phone);
+  const existing = findCustomerByPhone(normalizedPhone);
+  if (existing) {
+    return existing;
+  }
+
   const id = randomUUID();
   db.prepare(
     `insert into customers (id, first_name, last_name, phone, email, marketing_opt_in, created_at, updated_at)
@@ -46,7 +61,7 @@ export function createCustomer(input: Pick<Customer, 'firstName' | 'lastName' | 
     id,
     firstName: input.firstName,
     lastName: input.lastName ?? null,
-    phone: input.phone,
+    phone: normalizedPhone,
     email: input.email ?? null,
     marketingOptIn: input.marketingOptIn ? 1 : 0,
     createdAt: now,

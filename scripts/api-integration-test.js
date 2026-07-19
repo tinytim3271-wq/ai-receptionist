@@ -69,6 +69,14 @@ async function run() {
   assert(customer.status === 201, 'POST /api/ai/customers returns 201', `status=${customer.status}`);
   assert(typeof customer.body?.id === 'string' && customer.body.id.length > 0, 'Customer response includes id');
 
+  const normalizedLookup = await requestJson(`/api/ai/customers/lookup?phone=${encodeURIComponent(`(555) 300-${String(uniqueSuffix).slice(-4)}`)}`, {
+    method: 'GET',
+    headers,
+  });
+  assert(normalizedLookup.status === 200, 'GET /api/ai/customers/lookup with different phone format returns 200', `status=${normalizedLookup.status}`);
+  assert(normalizedLookup.body?.found === true, 'Cross-format phone lookup resolves existing customer');
+  assert(normalizedLookup.body?.customer?.id === customer.body.id, 'Cross-format lookup returns matching customer id');
+
   const vehicle = await requestJson('/api/ai/vehicles', {
     method: 'POST',
     headers,
