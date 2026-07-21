@@ -108,6 +108,10 @@ export async function handleCallerMessage(
     }
 
     for (const toolCall of message.tool_calls) {
+      if (!('function' in toolCall)) {
+        continue;
+      }
+
       const args = safeParse(toolCall.function.arguments);
       logInteraction({
         callId,
