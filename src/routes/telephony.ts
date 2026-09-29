@@ -6,7 +6,7 @@ import { config } from '../config';
 import { logGuardrailEvent } from '../repositories/aiInteractions';
 import { createCallbackTask } from '../repositories/callbackTasks';
 import { getCallByExternalCallId, startCall, updateCall } from '../repositories/calls';
-import { getWebhookEvent, recordWebhookEvent } from '../repositories/telephonyWebhookEvents';
+import { getWebhookEvent, tryClaimWebhookEvent, completeWebhookEvent } from '../repositories/telephonyWebhookEvents';
 
 export const telephonyRouter = Router();
 telephonyRouter.use(express.urlencoded({ extended: false }));
@@ -105,19 +105,25 @@ function verifyTelephonySignature(req: Request, res: Response): boolean {
   return true;
 }
 
-function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error('ai_timeout')), timeoutMs);
-    promise
-      .then((value) => {
-        clearTimeout(timer);
-        resolve(value);
-      })
-      .catch((err) => {
-        clearTimeout(timer);
-        reject(err);
-      });
-  });
+function withTimeout<T>(factory: (signal: AbortSignal) => Promise<T>, timeoutMs: number): Promise<T> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(new Error('ai_timeout')), timeoutMs);
+  return factory(controller.signal).finally(() => clearTimeout(timer));
+}
+
+async function waitForCachedWebhookResponse(
+  eventKey: string,
+  timeoutMs = Math.max(1000, config.telephonyAiTimeoutMs + 2000)
+): Promise<{ status: number; body: string } | null> {
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) {
+    const existing = getWebhookEvent(PROVIDER, eventKey);
+    if (existing?.responseBody) {
+      return { status: existing.responseCode || 200, body: existing.responseBody };
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  return null;
 }
 
 async function createFallbackAndCallback(callId: string, reason: string): Promise<string> {
@@ -169,17 +175,32 @@ async function runIdempotentXml(
 ): Promise<{ status: number; body: string }> {
   const existing = getWebhookEvent(PROVIDER, eventKey);
   if (existing?.responseBody) {
-    return { status: existing.responseCode, body: existing.responseBody };
+    return { status: existing.responseCode || 200, body: existing.responseBody };
   }
 
-  const body = await handler();
-  const status = 200;
-  try {
-    recordWebhookEvent({ provider: PROVIDER, eventKey, callId, responseCode: status, responseBody: body });
-  } catch {
-    // In concurrent retries, unique constraint can win elsewhere; cached response is still valid.
+  // Claim the unique (provider, event_key) row before side effects so concurrent
+  // Twilio retries cannot both execute the handler.
+  if (!tryClaimWebhookEvent({ provider: PROVIDER, eventKey, callId })) {
+    const cached = await waitForCachedWebhookResponse(eventKey);
+    if (cached) return cached;
+    // Winner abandoned without completing — fall through is unsafe; return a safe gather.
+    return {
+      status: 200,
+      body: buildTwimlGather('Thanks for holding. Please say that again so I can help.'),
+    };
   }
-  return { status, body };
+
+  try {
+    const body = await handler();
+    const status = 200;
+    completeWebhookEvent({ provider: PROVIDER, eventKey, responseCode: status, responseBody: body });
+    return { status, body };
+  } catch {
+    // Unblock concurrent waiters; handlers that need callback tasks should catch themselves.
+    const body = buildTwimlGather('I am having trouble completing that right now. Please try again shortly.');
+    completeWebhookEvent({ provider: PROVIDER, eventKey, responseCode: 200, responseBody: body });
+    return { status: 200, body };
+  }
 }
 
 function ensureCallForSid(callSid: string, from: string): { callId: string; isNew: boolean } {
@@ -244,11 +265,18 @@ telephonyRouter.post('/twilio/voice/turn', async (req, res) => {
     }
 
     try {
-      const aiResult = await withTimeout(handleCallerMessage(callId, speech), config.telephonyAiTimeoutMs);
+      const aiResult = await withTimeout(
+        (signal) => handleCallerMessage(callId, speech, { signal }),
+        config.telephonyAiTimeoutMs
+      );
       const reply = (aiResult.reply ?? '').trim() || 'Could you share a little more detail so I can help?';
       return buildTwimlGather(reply);
     } catch (err) {
-      const reason = err instanceof Error ? err.message : 'unknown_error';
+      const raw = err instanceof Error ? err.message : 'unknown_error';
+      const reason =
+        (err instanceof Error && err.name === 'AbortError') || /ai_timeout|aborted/i.test(raw)
+          ? 'ai_timeout'
+          : raw;
       const fallback = await createFallbackAndCallback(callId, reason);
       return buildTwimlGather(fallback);
     }
