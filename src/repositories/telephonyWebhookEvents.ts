@@ -40,6 +40,52 @@ export function getWebhookEvent(provider: string, eventKey: string): TelephonyWe
   return row ? toEvent(row) : undefined;
 }
 
+/** Insert a claim row so only one concurrent handler can run side effects for this event key. */
+export function tryClaimWebhookEvent(input: {
+  provider: string;
+  eventKey: string;
+  callId?: string;
+}): boolean {
+  const id = randomUUID();
+  const createdAt = new Date().toISOString();
+  try {
+    db.prepare(
+      `insert into telephony_webhook_events (id, provider, event_key, call_id, response_code, response_body, created_at)
+       values (@id, @provider, @eventKey, @callId, @responseCode, @responseBody, @createdAt)`
+    ).run({
+      id,
+      provider: input.provider,
+      eventKey: input.eventKey,
+      callId: input.callId ?? null,
+      responseCode: 0,
+      responseBody: null,
+      createdAt,
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function completeWebhookEvent(input: {
+  provider: string;
+  eventKey: string;
+  responseCode: number;
+  responseBody: string;
+}): TelephonyWebhookEvent | undefined {
+  db.prepare(
+    `update telephony_webhook_events
+     set response_code = @responseCode, response_body = @responseBody
+     where provider = @provider and event_key = @eventKey`
+  ).run({
+    provider: input.provider,
+    eventKey: input.eventKey,
+    responseCode: input.responseCode,
+    responseBody: input.responseBody,
+  });
+  return getWebhookEvent(input.provider, input.eventKey);
+}
+
 export function recordWebhookEvent(input: {
   provider: string;
   eventKey: string;

@@ -81,24 +81,36 @@ export function getSession(callId: string): CallSession | undefined {
 
 export async function handleCallerMessage(
   callId: string,
-  text: string
+  text: string,
+  options: { signal?: AbortSignal } = {}
 ): Promise<{ reply: string; events: SessionEvent[] }> {
   const session = sessions.get(callId);
   if (!session) {
     throw new Error(`No active session for call ${callId}`);
   }
 
+  const signal = options.signal;
+  const throwIfAborted = () => {
+    if (!signal?.aborted) return;
+    const reason = signal.reason instanceof Error ? signal.reason : new Error('ai_timeout');
+    throw reason;
+  };
+
   session.messages.push({ role: 'user', content: text });
   const newEvents: SessionEvent[] = [];
   const openai = getOpenAI();
 
   for (let round = 0; round < 8; round++) {
-    const completion = await openai.chat.completions.create({
-      model: config.openaiModel,
-      messages: session.messages,
-      tools: receptionistTools,
-      temperature: 0.4,
-    });
+    throwIfAborted();
+    const completion = await openai.chat.completions.create(
+      {
+        model: config.openaiModel,
+        messages: session.messages,
+        tools: receptionistTools,
+        temperature: 0.4,
+      },
+      signal ? { signal } : undefined
+    );
 
     const message = completion.choices[0].message;
     session.messages.push(message);
@@ -108,6 +120,7 @@ export async function handleCallerMessage(
     }
 
     for (const toolCall of message.tool_calls) {
+      throwIfAborted();
       const args = safeParse(toolCall.function.arguments);
       logInteraction({
         callId,
