@@ -5,8 +5,9 @@ import { endSession, getSession, handleCallerMessage, startSession } from '../ai
 import { config } from '../config';
 import { logGuardrailEvent } from '../repositories/aiInteractions';
 import { createCallbackTask } from '../repositories/callbackTasks';
-import { getCallByExternalCallId, startCall, updateCall } from '../repositories/calls';
+import { getCallByExternalCallId, getCallById, startCall, updateCall } from '../repositories/calls';
 import { getWebhookEvent, tryClaimWebhookEvent, completeWebhookEvent } from '../repositories/telephonyWebhookEvents';
+import { planTelephonyAiFallback } from '../services/telephonyFallback';
 
 export const telephonyRouter = Router();
 telephonyRouter.use(express.urlencoded({ extended: false }));
@@ -127,28 +128,39 @@ async function waitForCachedWebhookResponse(
 }
 
 async function createFallbackAndCallback(callId: string, reason: string): Promise<string> {
-  const call = updateCall(callId, { disposition: 'callback_scheduled', escalationReason: reason });
-  if (call?.disposition !== 'callback_scheduled') {
-    updateCall(callId, { disposition: 'callback_scheduled' });
+  const existing = getCallById(callId);
+  const plan = planTelephonyAiFallback(existing?.disposition);
+
+  if (plan.overwriteDisposition) {
+    const call = updateCall(callId, { disposition: 'callback_scheduled', escalationReason: reason });
+    if (call?.disposition !== 'callback_scheduled') {
+      updateCall(callId, { disposition: 'callback_scheduled' });
+    }
   }
 
-  createCallbackTask({
-    callId,
-    reason: `Telephony AI fallback: ${reason}`,
-    queueName: 'service_advisor',
-    priority: 'high',
-  });
+  if (plan.createCallback) {
+    createCallbackTask({
+      callId,
+      reason: `Telephony AI fallback: ${reason}`,
+      queueName: 'service_advisor',
+      priority: 'high',
+    });
+  }
 
   logGuardrailEvent({
     callId,
     eventType: 'telephony_ai_fallback',
     severity: 'warning',
     ruleName: 'telephony_timeout_fallback',
-    rawOutput: { reason },
-    actionTaken: 'Created callback task and used fallback caller response',
+    rawOutput: {
+      reason,
+      preservedDisposition: plan.preservedDisposition,
+      createCallback: plan.createCallback,
+    },
+    actionTaken: plan.logAction,
   });
 
-  return 'I am having trouble completing that right now. A service advisor will call you back shortly to help.';
+  return plan.message;
 }
 
 function buildEventKey(kind: 'start' | 'turn' | 'end', body: Record<string, string>): string {
