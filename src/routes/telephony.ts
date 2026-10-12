@@ -1,4 +1,4 @@
-import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
+import { createHmac, timingSafeEqual } from 'node:crypto';
 import express, { Router } from 'express';
 import type { Request, Response } from 'express';
 import { endSession, getSession, handleCallerMessage, startSession } from '../ai/receptionist';
@@ -7,30 +7,17 @@ import { logGuardrailEvent } from '../repositories/aiInteractions';
 import { createCallbackTask } from '../repositories/callbackTasks';
 import { getCallByExternalCallId, startCall, updateCall } from '../repositories/calls';
 import { getWebhookEvent, tryClaimWebhookEvent, completeWebhookEvent } from '../repositories/telephonyWebhookEvents';
+import {
+  buildTelephonyEventKey,
+  buildTwimlGather,
+  buildTwimlHangup,
+  extractTurnId,
+} from '../services/telephonyTwiml';
 
 export const telephonyRouter = Router();
 telephonyRouter.use(express.urlencoded({ extended: false }));
 
 const PROVIDER = 'twilio';
-
-function xmlEscape(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
-}
-
-function buildTwimlGather(prompt: string): string {
-  return `<?xml version="1.0" encoding="UTF-8"?><Response><Gather input="speech" speechTimeout="auto" method="POST" action="/api/telephony/twilio/voice/turn"><Say>${xmlEscape(
-    prompt
-  )}</Say></Gather><Redirect method="POST">/api/telephony/twilio/voice/turn</Redirect></Response>`;
-}
-
-function buildTwimlHangup(message: string): string {
-  return `<?xml version="1.0" encoding="UTF-8"?><Response><Say>${xmlEscape(message)}</Say><Hangup/></Response>`;
-}
 
 function getFormBody(req: Request): Record<string, string> {
   const body = (req.body ?? {}) as Record<string, unknown>;
@@ -151,23 +138,6 @@ async function createFallbackAndCallback(callId: string, reason: string): Promis
   return 'I am having trouble completing that right now. A service advisor will call you back shortly to help.';
 }
 
-function buildEventKey(kind: 'start' | 'turn' | 'end', body: Record<string, string>): string {
-  const callSid = body.CallSid ?? 'unknown';
-  const explicitKey = body.EventSid || body.RequestSid;
-  if (explicitKey) return `${callSid}:${kind}:${explicitKey}`;
-
-  const payloadFingerprint = createHash('sha256')
-    .update(
-      Object.keys(body)
-        .sort()
-        .map((k) => `${k}=${body[k]}`)
-        .join('&')
-    )
-    .digest('hex')
-    .slice(0, 24);
-  return `${callSid}:${kind}:${payloadFingerprint}`;
-}
-
 async function runIdempotentXml(
   eventKey: string,
   callId: string | undefined,
@@ -234,7 +204,7 @@ telephonyRouter.post('/twilio/voice/start', async (req, res) => {
     startSession(callId, from);
   }
 
-  const eventKey = buildEventKey('start', body);
+  const eventKey = buildTelephonyEventKey('start', body);
   const result = await runIdempotentXml(eventKey, callId, async () =>
     buildTwimlGather('Thanks for calling Reliable Shop Systems. How can I help you today?')
   );
@@ -257,7 +227,8 @@ telephonyRouter.post('/twilio/voice/turn', async (req, res) => {
     startSession(callId, from);
   }
 
-  const eventKey = buildEventKey('turn', body);
+  const turnId = extractTurnId(req.query as Record<string, unknown>);
+  const eventKey = buildTelephonyEventKey('turn', body, turnId);
   const result = await runIdempotentXml(eventKey, callId, async () => {
     const speech = (body.SpeechResult ?? '').trim();
     if (!speech) {
@@ -295,7 +266,7 @@ telephonyRouter.post('/twilio/voice/end', async (req, res) => {
   }
 
   const call = getCallByExternalCallId(callSid);
-  const eventKey = buildEventKey('end', body);
+  const eventKey = buildTelephonyEventKey('end', body);
   const result = await runIdempotentXml(eventKey, call?.id, async () => {
     if (call) {
       await endSession(call.id);

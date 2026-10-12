@@ -61,6 +61,8 @@ async function run() {
   });
   assert(start.status === 200, 'Telephony start returns 200', `status=${start.status}`);
   assert(start.text.includes('<Gather'), 'Telephony start returns Gather TwiML');
+  const startTurnMatch = start.text.match(/turnId=([^"&<]+)/);
+  assert(Boolean(startTurnMatch), 'Telephony start Gather includes turnId');
 
   const turnParams = {
     CallSid: callSid,
@@ -72,10 +74,29 @@ async function run() {
   const turn1 = await postForm('/api/telephony/twilio/voice/turn', turnParams);
   assert(turn1.status === 200, 'Telephony turn returns 200', `status=${turn1.status}`);
   assert(turn1.text.includes('<Response>'), 'Telephony turn returns TwiML response body');
+  const nextTurnMatch = turn1.text.match(/turnId=([^"&<]+)/);
+  assert(Boolean(nextTurnMatch), 'Telephony turn Gather includes a fresh turnId');
+  assert(nextTurnMatch[1] !== startTurnMatch[1], 'Each Gather mints a distinct turnId');
 
   const turnDup = await postForm('/api/telephony/twilio/voice/turn', turnParams);
   assert(turnDup.status === 200, 'Duplicate telephony turn returns 200', `status=${turnDup.status}`);
   assert(turnDup.text === turn1.text, 'Duplicate telephony turn returns cached response');
+
+  // Real Gather callbacks omit RequestSid; turnId must keep identical "yes" answers distinct.
+  const yesBody = {
+    CallSid: callSid,
+    From: from,
+    SpeechResult: 'yes',
+    Confidence: '1.0',
+  };
+  const yes1 = await postForm(`/api/telephony/twilio/voice/turn?turnId=turn-yes-1-${Date.now()}`, yesBody);
+  const yes2 = await postForm(`/api/telephony/twilio/voice/turn?turnId=turn-yes-2-${Date.now()}`, yesBody);
+  assert(yes1.status === 200, 'First yes turn returns 200', `status=${yes1.status}`);
+  assert(yes2.status === 200, 'Second identical yes turn returns 200', `status=${yes2.status}`);
+  const yes1Turn = yes1.text.match(/turnId=([^"&<]+)/)?.[1];
+  const yes2Turn = yes2.text.match(/turnId=([^"&<]+)/)?.[1];
+  assert(Boolean(yes1Turn && yes2Turn), 'Both yes turns return Gather turnIds');
+  assert(yes1Turn !== yes2Turn, 'Identical SpeechResult turns still get distinct follow-up turnIds');
 
   const end = await postForm('/api/telephony/twilio/voice/end', {
     CallSid: callSid,
